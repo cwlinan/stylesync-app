@@ -1,0 +1,7 @@
+{
+  "name": "無腦穿搭v1",
+  "description": "您的 AI 專屬造型師。上傳衣物照片或描述您的一天，即可獲得精心策劃的穿搭建議與視覺化效果。",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>StyleSync - AI 專屬造型師</title>
+    
+    <!-- PWA Settings -->
+    <link rel="manifest" href="./manifest.json" />
+    <meta name="theme-color" content="#FFF9F5" />
+    
+    <!-- iOS Specific PWA Settings -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="StyleSync" />
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/2806/2806148.png" />
+
+    <!-- Tailwind via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入可愛的圓體字型 -->
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+    
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"M PLUS Rounded 1c"', 'sans-serif'],
+            },
+            colors: {
+              'cream': '#FFF9F5',       // 背景奶油色
+              'sakura': '#FFB7B2',      // 櫻花粉
+              'sakura-dark': '#FF9E99', // 深一點的粉
+              'mint': '#B5EAD7',        // 薄荷綠
+              'sky': '#C7CEEA',         // 天空藍
+              'milk-tea': '#E2D5C4',    // 奶茶色
+              'choco': '#5D4037',       // 巧克力色 (取代黑色文字)
+              'choco-light': '#8D6E63', // 淺巧克力
+            },
+            boxShadow: {
+              'cute': '4px 4px 0px 0px rgba(226, 213, 196, 0.8)', // 硬陰影，像貼紙
+              'cute-hover': '2px 2px 0px 0px rgba(226, 213, 196, 1)',
+              'inner-soft': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.05)',
+            },
+            animation: {
+                'bounce-slight': 'bounceSlight 2s infinite',
+                'fade-in': 'fadeIn 0.5s ease-out',
+                'pop-in': 'popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+            },
+            keyframes: {
+                fadeIn: {
+                    '0%': { opacity: '0' },
+                    '100%': { opacity: '1' },
+                },
+                popIn: {
+                    '0%': { opacity: '0', transform: 'scale(0.8)' },
+                    '100%': { opacity: '1', transform: 'scale(1)' },
+                },
+                bounceSlight: {
+                    '0%, 100%': { transform: 'translateY(-5%)' },
+                    '50%': { transform: 'translateY(0)' },
+                }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      body {
+        background-color: #FFF9F5;
+        background-image: radial-gradient(#E2D5C4 1.5px, transparent 1.5px);
+        background-size: 24px 24px; /* 點點背景 */
+        color: #5D4037;
+        -webkit-tap-highlight-color: transparent;
+        overscroll-behavior-y: none;
+      }
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+      }
+      /* Cute Selection Highlight */
+      ::selection {
+        background: #FFB7B2;
+        color: white;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "vite": "https://esm.sh/vite@^7.2.7",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
