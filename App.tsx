@@ -3,23 +3,18 @@ import OutfitForm from './components/OutfitForm';
 import OutfitCard from './components/OutfitCard';
 import WardrobeManager from './components/WardrobeManager';
 import { UserPreferences, OutfitRecommendation, WardrobeItem } from './types';
-import { generateOutfitRecommendations, setGeminiApiKey } from './services/geminiService';
+import { generateOutfitRecommendations } from './services/geminiService';
 import { getAllWardrobeItems } from './utils/db';
-import { Shirt, ArrowLeft, Grid, Sparkles, Settings, X, Check, Smartphone, Key, AlertTriangle, Heart } from 'lucide-react';
+import { ArrowLeft, Grid, Sparkles, AlertTriangle } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'STYLIST' | 'WARDROBE' | 'SETTINGS'>('STYLIST');
+  const [activeTab, setActiveTab] = useState<'STYLIST' | 'WARDROBE'>('STYLIST');
   const [recommendations, setRecommendations] = useState<OutfitRecommendation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItem[]>([]);
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
   
-  // API Key State
-  const [apiKey, setApiKey] = useState('');
-  const [isApiKeySaved, setIsApiKeySaved] = useState(false);
-
   // 定義載入衣櫥的函式，使用 useCallback 避免不必要的依賴變更
   const refreshWardrobe = useCallback(async () => {
       try {
@@ -32,42 +27,17 @@ const App: React.FC = () => {
       }
   }, []);
 
-  // App 初始化：載入衣櫥資料與 API Key
+  // App 初始化：載入衣櫥資料
   useEffect(() => {
-    // 1. 立即載入衣櫥
     refreshWardrobe();
-
-    // 2. 載入 API Key
-    const savedKey = localStorage.getItem('GEMINI_API_KEY');
-    if (savedKey) {
-        setApiKey(savedKey);
-        setGeminiApiKey(savedKey);
-        setIsApiKeySaved(true);
-    }
+    // 我們移除了 localStorage 的讀取邏輯
+    // 現在 App 會全權依賴 Vite 編譯時注入的環境變數 (GitHub Secret)
   }, [refreshWardrobe]);
 
   // 當切換分頁時，也重新整理衣櫥（確保 WardrobeManager 的更動同步）
   useEffect(() => {
       refreshWardrobe();
   }, [activeTab, refreshWardrobe]);
-
-  const handleSaveApiKey = () => {
-      if (!apiKey.trim()) {
-          alert('請輸入有效的 API Key (´• ω •`)');
-          return;
-      }
-      localStorage.setItem('GEMINI_API_KEY', apiKey);
-      setGeminiApiKey(apiKey);
-      setIsApiKeySaved(true);
-      setShowSettingsModal(false);
-  };
-
-  const handleClearApiKey = () => {
-      localStorage.removeItem('GEMINI_API_KEY');
-      setApiKey('');
-      setGeminiApiKey('');
-      setIsApiKeySaved(false);
-  };
 
   const handleGetRecommendations = async (prefs: UserPreferences) => {
     setIsLoading(true);
@@ -88,8 +58,7 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       if (err.message === 'API_KEY_MISSING') {
-          setError("請先設定 API Key 喔！");
-          setShowSettingsModal(true);
+          setError("系統設定錯誤：找不到 API Key (環境變數)");
       } else {
           setError("AI 好像睡著了...請再試一次 (｡•́︿•̀｡)");
       }
@@ -110,8 +79,7 @@ const App: React.FC = () => {
       {/* Top Bar - Cute & Minimal */}
       <div className="h-safe-top w-full bg-cream/90 backdrop-blur-sm sticky top-0 z-30 flex items-center justify-center px-4 py-4">
           <h1 className="text-xl font-extrabold tracking-wide text-choco flex items-center gap-2">
-              {activeTab === 'STYLIST' ? (hasSearched ? '✨ 穿搭建議' : 'StyleSync') : 
-               activeTab === 'WARDROBE' ? '🎀 我的衣櫥' : '⚙️ 設定'}
+              {activeTab === 'STYLIST' ? (hasSearched ? '✨ 穿搭建議' : 'StyleSync') : '🎀 我的衣櫥'}
           </h1>
           {activeTab === 'STYLIST' && hasSearched && (
             <button 
@@ -120,15 +88,6 @@ const App: React.FC = () => {
             >
                 <ArrowLeft className="w-6 h-6" strokeWidth={3} />
             </button>
-          )}
-          
-          {!isApiKeySaved && (
-             <button 
-                onClick={() => setShowSettingsModal(true)}
-                className="absolute right-4 text-sakura animate-bounce-slight"
-             >
-                <Settings className="w-6 h-6" />
-             </button>
           )}
       </div>
 
@@ -190,96 +149,8 @@ const App: React.FC = () => {
                     )}
                 </div>
             )}
-            
-            {activeTab === 'SETTINGS' && (
-                <div className="px-5 py-6 animate-fade-in space-y-6">
-                     <div className="bg-white rounded-[2rem] p-6 shadow-cute border-2 border-milk-tea">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-choco">
-                            <Key className="w-5 h-5 text-sakura" strokeWidth={2.5} /> 魔法金鑰 (API Key)
-                        </h3>
-                        <p className="text-xs text-choco-light mb-4 font-medium">
-                             Stylist AI 需要 Google Gemini 的力量才能運作喔！
-                        </p>
-                        
-                        <div className="space-y-3">
-                            <input 
-                                type="password" 
-                                placeholder="貼上 API Key..."
-                                value={apiKey}
-                                onChange={(e) => setApiKey(e.target.value)}
-                                className="w-full p-4 bg-cream border-2 border-milk-tea rounded-2xl text-sm focus:border-sakura focus:ring-0 outline-none transition-all placeholder:text-milk-tea text-choco"
-                            />
-                            <button 
-                                onClick={handleSaveApiKey}
-                                className="w-full bg-choco text-white py-3 rounded-2xl font-bold text-sm shadow-[0_4px_0_0_#3E2723] active:translate-y-[4px] active:shadow-none transition-all"
-                            >
-                                儲存設定
-                            </button>
-                            {isApiKeySaved && (
-                                <button 
-                                    onClick={handleClearApiKey}
-                                    className="w-full text-choco-light py-2 text-xs font-bold hover:text-sakura"
-                                >
-                                    清除 Key
-                                </button>
-                            )}
-                        </div>
-                     </div>
-
-                     <div className="bg-white rounded-[2rem] p-6 shadow-cute border-2 border-milk-tea">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-choco">
-                            <Heart className="w-5 h-5 text-sakura" fill="#FFB7B2" /> 關於 StyleSync
-                        </h3>
-                        <div className="space-y-3">
-                            <div className="flex items-center gap-3 p-3 bg-cream rounded-xl border border-milk-tea">
-                                <Check size={18} className="text-mint" strokeWidth={3} />
-                                <span className="text-xs text-choco font-bold">隱私安全：照片不存雲端</span>
-                            </div>
-                            <div className="flex items-center gap-3 p-3 bg-cream rounded-xl border border-milk-tea">
-                                <Check size={18} className="text-mint" strokeWidth={3} />
-                                <span className="text-xs text-choco font-bold">離線可用：PWA 技術支援</span>
-                            </div>
-                        </div>
-                     </div>
-                </div>
-            )}
-
         </div>
       </main>
-
-      {/* Settings Modal */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-choco/40 backdrop-blur-sm animate-pop-in">
-            <div className="bg-white rounded-[2.5rem] p-6 w-full max-w-sm shadow-2xl relative border-4 border-white">
-                <button 
-                    onClick={() => setShowSettingsModal(false)}
-                    className="absolute top-4 right-4 bg-cream p-2 rounded-full text-choco-light hover:text-choco"
-                >
-                    <X className="w-6 h-6" strokeWidth={3} />
-                </button>
-                <div className="text-center mb-6 mt-2">
-                    <div className="bg-sakura/20 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 animate-bounce-slight">
-                        <Key className="w-8 h-8 text-sakura" />
-                    </div>
-                    <h3 className="text-xl font-bold text-choco">需要 API Key</h3>
-                    <p className="text-sm text-choco-light mt-2 font-medium">請輸入 Google Gemini API Key<br/>讓我啟動魔法！✨</p>
-                </div>
-                <input 
-                    type="password" 
-                    placeholder="貼上你的 Key..."
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full p-4 bg-cream border-2 border-milk-tea rounded-2xl mb-4 outline-none focus:border-sakura transition-colors text-choco text-center"
-                />
-                <button 
-                    onClick={handleSaveApiKey}
-                    className="w-full py-4 bg-sakura text-white rounded-2xl font-bold text-lg shadow-[0_4px_0_0_#FF9E99] active:translate-y-[4px] active:shadow-none transition-all"
-                >
-                    確認儲存
-                </button>
-            </div>
-        </div>
-      )}
 
       {/* Floating Bottom Navigation */}
       <nav className="fixed bottom-6 left-6 right-6 z-40">
@@ -302,16 +173,6 @@ const App: React.FC = () => {
                     <Sparkles className="w-6 h-6" strokeWidth={2.5} fill={activeTab === 'STYLIST' ? "white" : "none"} />
                 </div>
                 <span className={`text-[10px] font-bold ${activeTab === 'STYLIST' ? 'translate-y-[-2px]' : 'scale-0 h-0 opacity-0'} transition-all`}>穿搭</span>
-            </button>
-            
-            <button 
-                onClick={() => { setActiveTab('SETTINGS'); handleReset(); }}
-                className={`flex-1 flex flex-col items-center justify-center h-full gap-1 transition-all rounded-2xl ${activeTab === 'SETTINGS' ? 'text-choco' : 'text-milk-tea'}`}
-            >
-                <div className={`p-1.5 rounded-xl transition-all duration-300 ${activeTab === 'SETTINGS' ? 'bg-sky text-white rotate-[6deg] scale-110 shadow-sm' : ''}`}>
-                    <Settings className="w-5 h-5" strokeWidth={2.5} />
-                </div>
-                <span className={`text-[10px] font-bold ${activeTab === 'SETTINGS' ? 'scale-100' : 'scale-0 h-0 opacity-0'} transition-all`}>設定</span>
             </button>
         </div>
       </nav>

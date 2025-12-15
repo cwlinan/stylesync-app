@@ -1,30 +1,23 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { UserPreferences, OutfitRecommendation, ClothingCategory, WardrobeItem, Gender, Occasion, WeatherType } from '../types';
 
-// Store API key in memory (or localStorage management handled by App.tsx)
-let currentApiKey: string | null = null;
+// Store API key in memory if needed for complex flows, but primarily rely on env
 let aiClient: GoogleGenAI | null = null;
 
-export const setGeminiApiKey = (key: string) => {
-    currentApiKey = key;
-    // Re-initialize client
-    if (key) {
-        aiClient = new GoogleGenAI({ apiKey: key });
-    }
-};
-
 const getAiClient = () => {
-    // Try to get from process.env if available (Development mode), otherwise use manual key
     if (!aiClient) {
-        const envKey = typeof process !== 'undefined' && process.env ? process.env.API_KEY : null;
+        // The API key is injected via vite.config.ts define plugin
+        // accessible as process.env.API_KEY
+        const envKey = process.env.API_KEY;
+
         if (envKey) {
             aiClient = new GoogleGenAI({ apiKey: envKey });
-        } else if (currentApiKey) {
-            aiClient = new GoogleGenAI({ apiKey: currentApiKey });
         }
     }
     
     if (!aiClient) {
+        // More descriptive error for debugging
+        console.error("Gemini Client Init Failed: process.env.API_KEY is missing or empty.");
         throw new Error("API_KEY_MISSING");
     }
     return aiClient;
@@ -194,29 +187,15 @@ export const generateOutfitVisual = async (description: string, context: UserPre
     const ai = getAiClient();
     const model = 'gemini-2.5-flash-image'; 
     
-    const parts: any[] = [];
-    
-    // Add reference images from wardrobe
-    if (referenceItems && referenceItems.length > 0) {
-        referenceItems.forEach(item => {
-            parts.push({
-                inlineData: {
-                    data: item.imageData,
-                    mimeType: item.mimeType || 'image/jpeg' 
-                }
-            });
-        });
-    }
-
     // 1. Determine Gender & Body Type Params
     const isFemale = context.gender === Gender.FEMALE;
     const isMale = context.gender === Gender.MALE;
     
     let subjectPrompt = "";
     if (isFemale) {
-        subjectPrompt = "A cute Taiwanese woman, height approx 152cm, weight approx 52kg. Petite but well-proportioned figure.";
+        subjectPrompt = "A fashionable Taiwanese woman, height approx 160cm. Petite but well-proportioned figure.";
     } else if (isMale) {
-        subjectPrompt = "A stylish Taiwanese man, height approx 170cm, weight approx 60kg. Slim to average build.";
+        subjectPrompt = "A stylish Taiwanese man, height approx 175cm. Slim to average build.";
     } else {
         // Unisex/Default
         subjectPrompt = "A stylish Taiwanese person, height approx 165cm, natural build.";
@@ -270,56 +249,55 @@ export const generateOutfitVisual = async (description: string, context: UserPre
             weatherPrompt = "Natural daylight.";
     }
 
-    // Construct the full prompt
-    let prompt = `
-    High-quality portrait photography.
-    Subject: ${subjectPrompt}
-    Skin Tone: Natural fair to light wheat skin tone (Asian/Taiwanese).
-    Pose: Natural, candid pose, looking at camera or slightly away, confident and relaxed.
-    
-    Outfit Details: ${description}.
-    
-    Background: ${backgroundPrompt}
-    Lighting/Weather: ${weatherPrompt}
-    
-    Style: Photorealistic, 4k, shot on 35mm film, highly detailed fabric textures, depth of field (bokeh background), film grain, natural lighting.
-    
-    Important Constraints:
-    - Aspect Ratio: 3:4 (Vertical)
-    - Face: Natural Taiwanese facial features, realistic skin texture, slight imperfections, avoid overly smoothed AI skin.
-    - Consistency: Ensure the outfit matches the description exactly.
-    `;
-    
-    if (referenceItems.length > 0) {
-        prompt += `\nCRITICAL: I have provided images of specific items. You MUST incorporate these items visually into the outfit, matching their color and pattern exactly.`;
+    // 4. Detailed Outfit Description from References
+    let outfitDetails = description;
+    if (referenceItems && referenceItems.length > 0) {
+        // 將衣櫥的圖片轉換為文字描述
+        outfitDetails += " \n\nWEARING THE FOLLOWING SPECIFIC ITEMS (MATCH COLOR AND STYLE EXACTLY):";
+        referenceItems.forEach(item => {
+            outfitDetails += `\n- ${item.category}: ${item.description} (Keywords: ${item.tags.join(', ')})`;
+        });
     }
 
-    parts.push({ text: prompt });
-
+    // Construct the full prompt
+    let prompt = `
+    High-quality fashion photography, street snap style.
+    Subject: ${subjectPrompt}
+    Skin Tone: Natural Asian/Taiwanese skin tone.
+    Pose: Natural, standing, confident look.
+    
+    Outfit: ${outfitDetails}
+    
+    Background: ${backgroundPrompt}
+    Lighting: ${weatherPrompt}
+    
+    Style: Photorealistic, 8k, shot on 35mm film, highly detailed textures, depth of field.
+    Ensure the clothing colors match the description exactly.
+    `;
+    
     const response = await ai.models.generateContent({
-      model,
-      contents: { parts },
+      model: model,
+      contents: {
+        parts: [{ text: prompt }]
+      },
       config: {
-        // Enforce 3:4 aspect ratio for vertical full-body shots
         imageConfig: {
-            aspectRatio: "3:4"
+          aspectRatio: "3:4"
         }
       }
     });
 
-    const outputParts = response.candidates?.[0]?.content?.parts;
-    if (outputParts) {
-      for (const part of outputParts) {
-        if (part.inlineData) {
-          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    if (response.candidates && response.candidates.length > 0) {
+        for (const part of response.candidates[0].content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+                return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+            }
         }
-      }
     }
     
-    console.warn("No image data found in response:", response.candidates?.[0]?.content?.parts);
     return null;
   } catch (error) {
-    console.error("Gemini Image Gen Error:", error);
-    throw error;
+    console.error("Gemini Visual Generation Error:", error);
+    return null;
   }
 };

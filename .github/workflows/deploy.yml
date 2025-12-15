@@ -28,6 +28,10 @@ jobs:
         run: npm install
       - name: Build
         run: npm run build
+        env:
+          # 這裡很重要！我們將 GitHub Secrets 的 API_KEY 傳入，並改名為 VITE_API_KEY
+          # 這樣 Vite 在打包時就能將它「燒錄」進程式碼中
+          VITE_API_KEY: ${{ secrets.API_KEY }}
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
