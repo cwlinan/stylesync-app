@@ -6,9 +6,11 @@ let aiClient: GoogleGenAI | null = null;
 
 const getAiClient = () => {
     if (!aiClient) {
-        // The API key is injected via vite.config.ts define plugin
-        // accessible as process.env.API_KEY
-        const envKey = process.env.API_KEY;
+        // Robust API Key Detection
+        const envKey = process.env.API_KEY || 
+                       (import.meta as any).env?.VITE_API_KEY || 
+                       (import.meta as any).env?.GOOGLE_API_KEY ||
+                       (import.meta as any).env?.API_KEY;
 
         if (envKey) {
             aiClient = new GoogleGenAI({ apiKey: envKey });
@@ -16,8 +18,7 @@ const getAiClient = () => {
     }
     
     if (!aiClient) {
-        // More descriptive error for debugging
-        console.error("Gemini Client Init Failed: process.env.API_KEY is missing or empty.");
+        console.error("Gemini Client Init Failed: API_KEY is missing from environment.");
         throw new Error("API_KEY_MISSING");
     }
     return aiClient;
@@ -30,8 +31,8 @@ export const analyzeWardrobeItem = async (base64Image: string): Promise<{ catego
     const model = 'gemini-2.5-flash';
     const prompt = `分析這張衣物圖片。
     1. 將其分類為以下之一: ${Object.values(ClothingCategory).join(', ')}。
-    2. 提供簡短描述（例如：深藍色牛仔外套，復古水洗）。
-    3. 提供 3-5 個關鍵字標籤（顏色、材質、風格）。
+    2. 提供簡短描述（例如：淺藍色寬版牛仔外套，韓系風格）。
+    3. 提供 3-5 個關鍵字標籤（顏色、材質、風格，例如：Y2K, CityBoy, 復古）。
     請以 JSON 格式回傳，包含 category, description, tags 欄位。`;
 
     const response = await ai.models.generateContent({
@@ -95,12 +96,12 @@ const recommendationSchema = {
   type: Type.OBJECT,
   properties: {
     title: { type: Type.STRING },
-    description: { type: Type.STRING },
+    description: { type: Type.STRING, description: "Max 15 words summary." },
     items: {
       type: Type.ARRAY,
       items: outfitItemSchema,
     },
-    reasoning: { type: Type.STRING },
+    reasoning: { type: Type.STRING, description: "Max 1 sentence punchy tip." },
     colorPalette: {
       type: Type.ARRAY,
       items: { type: Type.STRING },
@@ -129,27 +130,29 @@ export const generateOutfitRecommendations = async (
         ).join('\n');
         
         wardrobeContext = `
-        使用者擁有以下衣櫥庫存（數位衣櫥）。
-        請優先從這些單品中挑選來組合成套。
-        當你使用庫存單品時，務必在 items 的 wardrobeItemId 欄位填入對應的 ID。
-        如果缺少女生單品或鞋子來完成造型，你可以建議通用的單品。
+        使用者擁有數位衣櫥庫存。
+        請優先從庫存挑選。使用庫存時，務必在 items 的 wardrobeItemId 填入 ID。
+        若缺搭配單品，可建議通用單品。
         
-        庫存列表:
+        庫存:
         ${itemsList}
         `;
     }
 
-    let prompt = `你是一位專業個人造型師。請為一位${prefs.gender}提供 3 套穿搭建議。
-    請使用繁體中文回答。
+    // Updated Prompt: 2 sets, Very short text
+    let prompt = `你是一位年輕潮流造型師（IG/Threads 風格）。
+    為一位${prefs.gender}提供 **2 套** 穿搭建議。
+    
+    風格要求：
+    - 年輕、活潑、韓系/日系/CityBoy/Y2K。
+    - **文字極度精簡**：說明請在 15 字以內，理由請用一句話解決。不要廢話。
     
     情境：
     - 場合：${prefs.occasion}
     - 天氣：${prefs.weather}
-    - 風格：${prefs.styleParams || '時尚, 簡約'}
+    - 偏好：${prefs.styleParams || '簡約質感'}
     
     ${wardrobeContext}
-    
-    若沒有使用庫存，請提供通用的購買建議。
     `;
 
     const parts: any[] = [{ text: prompt }];
@@ -160,7 +163,7 @@ export const generateOutfitRecommendations = async (
       config: {
         responseMimeType: "application/json",
         responseSchema: responseSchema,
-        systemInstruction: "你是一位擅長混搭的時尚顧問。請根據現有衣物最大化利用，並給出具體的搭配理由。",
+        systemInstruction: "你是一位話少但精準的年輕穿搭客。拒絕老氣。請用 JSON 格式回傳。",
       },
     });
 
@@ -185,110 +188,54 @@ export const generateOutfitRecommendations = async (
 export const generateOutfitVisual = async (description: string, context: UserPreferences, referenceItems: WardrobeItem[] = []): Promise<string | null> => {
   try {
     const ai = getAiClient();
+    
+    // Switch to gemini-2.5-flash-image for better stability on free tier
+    // Do NOT use 'imagen-3.0-generate-001' if it fails with permission errors
     const model = 'gemini-2.5-flash-image'; 
     
-    // 1. Determine Gender & Body Type Params
     const isFemale = context.gender === Gender.FEMALE;
     const isMale = context.gender === Gender.MALE;
     
-    let subjectPrompt = "";
-    if (isFemale) {
-        subjectPrompt = "A fashionable Taiwanese woman, height approx 160cm. Petite but well-proportioned figure.";
-    } else if (isMale) {
-        subjectPrompt = "A stylish Taiwanese man, height approx 175cm. Slim to average build.";
-    } else {
-        // Unisex/Default
-        subjectPrompt = "A stylish Taiwanese person, height approx 165cm, natural build.";
-    }
+    let subjectPrompt = "young fashion model";
+    if (isFemale) subjectPrompt = "young trendy female, street style";
+    else if (isMale) subjectPrompt = "young trendy male, city boy style";
 
-    // 2. Determine Background based on Occasion
-    let backgroundPrompt = "";
-    switch (context.occasion) {
-        case Occasion.CASUAL:
-            backgroundPrompt = "Taiwanese street scene, nearby a bubble tea shop or convenience store, relaxed daytime vibe.";
-            break;
-        case Occasion.WORK:
-            backgroundPrompt = "Modern office setting in Taipei or a clean urban business district background.";
-            break;
-        case Occasion.DATE:
-            backgroundPrompt = "A cozy cafe interior with warm lighting or a scenic spot in a creative park (like Huashan 1914).";
-            break;
-        case Occasion.PARTY:
-            backgroundPrompt = "A trendy evening bistro or lounge bar entrance with ambient lighting.";
-            break;
-        case Occasion.GYM:
-            backgroundPrompt = "A bright modern gym interior or an outdoor riverside running track in Taipei.";
-            break;
-        case Occasion.FORMAL:
-            backgroundPrompt = "A high-end hotel lobby or banquet hall entrance.";
-            break;
-        default:
-            backgroundPrompt = "A clean, aesthetic urban street corner in Taiwan.";
-    }
+    let bg = "street corner";
+    if (context.occasion === Occasion.WORK) bg = "modern office";
+    if (context.occasion === Occasion.PARTY) bg = "neon night city";
+    if (context.occasion === Occasion.GYM) bg = "gym";
 
-    // 3. Determine Weather/Atmosphere
-    let weatherPrompt = "";
-    switch (context.weather) {
-        case WeatherType.SUNNY:
-            weatherPrompt = "Sunny day, bright natural sunlight, distinct shadows, vibrant colors.";
-            break;
-        case WeatherType.CLOUDY:
-            weatherPrompt = "Overcast day, soft diffused lighting, no harsh shadows, cozy atmosphere.";
-            break;
-        case WeatherType.RAINY:
-            weatherPrompt = "Rainy day, holding a clear plastic umbrella, wet pavement reflections, moody cinematic lighting.";
-            break;
-        case WeatherType.SNOWY:
-        case WeatherType.COLD:
-            weatherPrompt = "Cold weather, visible breath, soft winter lighting.";
-            break;
-        case WeatherType.HOT:
-            weatherPrompt = "Hot summer day, bright intense sun, summer vibe.";
-            break;
-        default:
-            weatherPrompt = "Natural daylight.";
-    }
-
-    // 4. Detailed Outfit Description from References
     let outfitDetails = description;
+    // Add visual cues from reference items if available
     if (referenceItems && referenceItems.length > 0) {
-        // 將衣櫥的圖片轉換為文字描述
-        outfitDetails += " \n\nWEARING THE FOLLOWING SPECIFIC ITEMS (MATCH COLOR AND STYLE EXACTLY):";
-        referenceItems.forEach(item => {
-            outfitDetails += `\n- ${item.category}: ${item.description} (Keywords: ${item.tags.join(', ')})`;
-        });
+        // We can't easily pass the image bytes to this specific generation call without making it a multimodal prompt for 'content' generation
+        // For now, we rely on the text description of the items + the overall style
+        const itemDescs = referenceItems.map(i => i.description).join(", ");
+        outfitDetails += `, including ${itemDescs}`;
     }
 
-    // Construct the full prompt
-    let prompt = `
-    High-quality fashion photography, street snap style.
+    const prompt = `Generate a high-quality fashion photo. 
     Subject: ${subjectPrompt}
-    Skin Tone: Natural Asian/Taiwanese skin tone.
-    Pose: Natural, standing, confident look.
+    Wearing: ${outfitDetails}
+    Background: ${bg}
+    Style: Photorealistic, 8k, cinematic lighting, full body shot.`;
     
-    Outfit: ${outfitDetails}
-    
-    Background: ${backgroundPrompt}
-    Lighting: ${weatherPrompt}
-    
-    Style: Photorealistic, 8k, shot on 35mm film, highly detailed textures, depth of field.
-    Ensure the clothing colors match the description exactly.
-    `;
-    
+    console.log("Generating visual with Gemini Flash Image...");
+
+    // Use generateContent for gemini-2.5-flash-image (Nano Banana)
     const response = await ai.models.generateContent({
       model: model,
       contents: {
-        parts: [{ text: prompt }]
+        parts: [{ text: prompt }],
       },
-      config: {
-        imageConfig: {
-          aspectRatio: "3:4"
-        }
-      }
+      // Note: responseMimeType is NOT supported for image generation models in this mode
+      config: {} 
     });
 
-    if (response.candidates && response.candidates.length > 0) {
-        for (const part of response.candidates[0].content.parts) {
+    // Iterate through parts to find the image
+    const candidates = response.candidates;
+    if (candidates && candidates[0].content.parts) {
+        for (const part of candidates[0].content.parts) {
             if (part.inlineData && part.inlineData.data) {
                 return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
             }
@@ -296,8 +243,8 @@ export const generateOutfitVisual = async (description: string, context: UserPre
     }
     
     return null;
-  } catch (error) {
-    console.error("Gemini Visual Generation Error:", error);
+  } catch (error: any) {
+    console.error("Visual Generation Error:", error);
     return null;
   }
 };

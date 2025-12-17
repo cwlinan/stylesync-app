@@ -4,17 +4,25 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
   const env = loadEnv(mode, process.cwd(), '')
+  
+  // Prioritize keys in this order:
+  // 1. Process environment (system/container)
+  // 2. .env files loaded by Vite
+  // Support standard VITE_ prefix, but also GOOGLE_API_KEY (AI Studio/IDX default) and generic API_KEY
+  const apiKey = process.env.API_KEY || 
+                 process.env.VITE_API_KEY || 
+                 process.env.GOOGLE_API_KEY || 
+                 env.API_KEY || 
+                 env.VITE_API_KEY || 
+                 env.GOOGLE_API_KEY;
 
   return {
     plugins: [react()],
-    base: './', // 確保 GitHub Pages 子路徑路徑正確
+    base: './', // Ensure correct path for GitHub Pages
     define: {
-      // 這是關鍵：我們將編譯時期的環境變數 (VITE_API_KEY) 
-      // 注入到程式碼中的 process.env.API_KEY
-      // 這樣就能符合 SDK 的規範，同時在 GitHub Pages 上運作
-      'process.env.API_KEY': JSON.stringify(process.env.VITE_API_KEY || env.VITE_API_KEY)
+      // Inject the detected API key into the code
+      'process.env.API_KEY': JSON.stringify(apiKey)
     }
   }
 })

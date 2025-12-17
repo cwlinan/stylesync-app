@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { WardrobeItem, ClothingCategory } from '../types';
 import { analyzeWardrobeItem } from '../services/geminiService';
 import { addWardrobeItem, getAllWardrobeItems, deleteWardrobeItem } from '../utils/db';
-import { Plus, Trash2, Loader2, Shirt, Download } from 'lucide-react';
+import { Plus, Trash2, Loader2, Shirt, Download, ImagePlus } from 'lucide-react';
 
 interface WardrobeManagerProps {
     onItemChange?: () => void;
@@ -206,18 +206,25 @@ const WardrobeManager: React.FC<WardrobeManagerProps> = ({ onItemChange }) => {
         </div>
       )}
 
-      {/* Cute FAB */}
-      <button 
-        onClick={() => fileInputRef.current?.click()}
-        className="fixed bottom-24 right-6 w-16 h-16 bg-sakura text-white rounded-full shadow-cute flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-20 border-2 border-white"
-      >
-        <Plus size={32} strokeWidth={3} />
-      </button>
+      {/* Cute FAB - Removed capture attribute to allow Gallery selection */}
+      <div className="fixed bottom-24 right-6 flex flex-col items-center gap-3 z-20">
+         <div className="relative group">
+             <div className="absolute right-0 bottom-full mb-2 bg-choco text-white text-xs py-1 px-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+                新增衣服
+             </div>
+             <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="w-16 h-16 bg-sakura text-white rounded-full shadow-cute flex items-center justify-center hover:scale-110 active:scale-95 transition-all border-2 border-white"
+            >
+                <Plus size={32} strokeWidth={3} />
+            </button>
+         </div>
+      </div>
 
       <input 
           type="file" 
           accept="image/*" 
-          capture="environment" 
+          // capture="environment" removed to support gallery selection
           className="hidden" 
           ref={fileInputRef}
           onChange={handleFileSelect}
